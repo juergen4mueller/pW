@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <link href="css/normalize.css" rel="stylesheet">
+    <link href="css/small.css" rel="stylesheet">
+    <link href="css/medium.css" rel="stylesheet">
+    <link href="css/large.css" rel="stylesheet">
+
+    <title>HOME | pW System Overview</title>
+    <script type="text/javascript" src="/eel.js"></script>
+    <script type="text/javascript" src="js/js-file.js"></script>
+</head>
+
+<body>
+    <div class="main_div">
+        <header>
+            <section class="row">
+                <section>
+                    <h1>Engineering View</h1>
+                </section>
+                <section class="navItems">
+                    <a href="index.html"><img class="navIcon active" src="images/home_FILL0_wght400_GRAD0_opsz48.svg"
+                            alt="Home"></a>
+                    <a href="setup.html"><img class="navIcon" src="images/settings_FILL0_wght400_GRAD0_opsz48.svg"
+                            alt="Setup"></a>
+                </section>
+            </section>
+        </header>
+        <main>
+            <div class="row_flex">
+                <div class="col_flex small-6 medium-3">
+                    <section class="dataField">
+                        <section class="itemName">
+                            lat:
+                        </section>
+                        <section id="gps_let" class="itemValue">
+                            49,23 N
+                        </section>
+                    </section>
+                    <section class="dataField">
+                        <section class="itemName">
+                            lon:
+                        </section>
+                        <section class="itemValue">
+                            11.989786 E
+                        </section>
+                    </section>
+                    <section class="dataField">
+                        <section class="itemName">
+                            speed:
+                        </section>
+                        <section class="itemValue">
+                            20,5 km/h
+                        </section>
+                    </section>
+                    <section class="dataField">
+                        <section class="itemName">
+                            direction:
+                        </section>
+                        <section id="gps_dir" class="itemValue">
+                            185 °
+                        </section>
+                    </section>
+                </div>
+
+                <div class="col_flex small-6 medium-3">
+                    <section class="dataField">
+                        <section class="itemName">
+                            direction:
+                        </section>
+                        <section class="itemKompass">
+                            <img class="kompass" src="images/Kompass_Background.png" width="80" height="80" alt="">
+                            <img id="kompassnadel" class="kompass" src="images/Kompass_Nadel.png" width="80" height="80"
+                                alt="">
+                        </section>
+                    </section>
+                </div>
+            </div>
+            <div class="row_flex controls">
+                <button id="btnStartLogging" class="myButton" onclick="startApp()">Start Application</button>
+                <img src="images/proc_running.gif" width="40" height="40" alt="">
+                <button id="btnStopLogging" class="myButton" onclick="stopApp()">Stop Application</button>
+                <img id="imgProgress" src="images/proc_running.gif" width="498" height="498" alt="">
+            </div>
+        </main>
+
+        <div class="video_div">
+            <h1>Image processing</h1>
+            <img src="http://127.0.0.1:8090/video_feed" alt="">
+            <section class="row_btnResolution">
+                <button class="btnResolution" onclick="setResolution(1600,1200)">1600x1200</button>
+                <button class="btnResolution" onclick="setResolution(1200,900)">1200x900</button>
+                <button class="btnResolution" onclick="setResolution(800,600)">800x600</button>
+                <button class="btnResolution" onclick="setResolution(400,300)">400x300</button>
+            </section>
+        </div>
+
+        <footer>
+            <div class="footer">
+                <h2> &copy 2022 Juergen Mueller / Christian Eichhammer </h1>
+            </div> <!-- end row -->
+        </footer>
+</body>
+
+</html>

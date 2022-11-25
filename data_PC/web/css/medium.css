@@ -1,0 +1,55 @@
+@media only screen and (min-width: 768px) {
+
+    .main_div {
+        position: absolute;
+        width: 50vw;
+        top: 0px;
+        left: 0px;
+    }
+
+    .main_div h1 {
+        font-size: 4vw;
+    }
+
+    header img {
+        height: 5vw;
+    }
+
+    .video_div {
+        position: absolute;
+        width: 50vw;
+        top: 0px;
+        left: 50vw;
+    }
+
+    .myButton {
+        font-size: 2.5vw;
+        padding: 2vw 1vw;
+        margin: 0.5vw;
+    }
+
+    .itemName {
+        font-size: 2vw;
+        padding: 1px 3px;
+    }
+
+    .itemValue {
+        font-size: 2.5vw;
+        text-align: right;
+        padding: 1px 3px;
+    }
+
+    .medium-3 {
+        width: 25vw;
+    }
+
+    .kompass {
+        top: 3.5vw;
+        left: 2.5vw;
+        width: 15vw;
+        height: 15vw;
+    }
+
+}
+
+/* end of media query */
