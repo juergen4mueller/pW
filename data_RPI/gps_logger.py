@@ -189,8 +189,8 @@ col_sw = (0, 0, 0, 0)
 
 def getGpsPos():
     """GPS-Empfänger über USB einlesen und auswerten"""
-    serialPort = get_ser
-    ser = serial.Serial("/dev/ttyACM0", 9600, timeout=5.0)
+    sp = get_serial_port()
+    ser = serial.Serial(sp, 9600, timeout=5.0)
     sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
     print("Starte GPS Auswertung")
     while True:
