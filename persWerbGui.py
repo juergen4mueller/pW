@@ -49,5 +49,5 @@ if __name__ == "__main__":
     time.sleep(2)
     print("starting eel ...")
     eel.start(
-        "index.html", host="0.0.0.0", mode="chrome", port=8086, size=(800, 480), position=(0, 0)
+        "index.html", host="localhost", mode="chrome", port=8080, size=(800, 480), position=(0, 0)
     )

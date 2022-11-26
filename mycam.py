@@ -156,9 +156,9 @@ def video_feed():
     return Response(cam.get_image_bytes(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
-def runVideoServer():
+def runVideoServer(host="127.0.0.1", port=8090):
   print("starting App ...")
-  app.run_server(debug=False, host="0.0.0.0", port=8090)
+  app.run_server(debug=False, host=host, port=port)
   print("App destroyed")
 
 videoServer = threading.Thread(None, runVideoServer, daemon=True)

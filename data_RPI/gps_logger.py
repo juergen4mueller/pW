@@ -8,37 +8,30 @@ from pyzbar.pyzbar import decode
 import sys
 import os
 import sqlite3
+import platform
+import glob
 
-import board
-import neopixel
+
 import logging
 
-
-class Neopixel:
-    """Für die Statusanzeige ohne Monitor"""
-
-    def __init__(self, pin, pixel_number: int) -> None:
-        """_summary_
-
-        Args:
-            pin (board.D10): Pin für die Signalleitung -> D10 verwenden
-            pixel_number (int): Anzahl LED's
-        """
-        self.pixels = neopixel.NeoPixel(pin, pixel_number, pixel_order=neopixel.RGBW)
-        for i in range(pixel_number):
-            self.pixels[i] = (0, 0, 0, 0)
-        self.pixels.show()
-
-    def update_pixel(self, pixel: int, colour):
-        """_summary_
-
-        Args:
-            pixel (int): LED Position
-            colour (_type_): Farbe der LED (Tuple(gn, rt, bl, ws))
-        """
-        self.pixels[pixel] = colour
-        self.pixels.show()
-
+def get_serial_port():
+    serialPort = None
+    system = platform.system()
+    if system =="Darwin":
+        serialPort = glob.glob("/dev/tty.usb*")[0]
+       
+    elif system =="Linux":
+        sps = glob.glob("/dev/ttyUSB*")
+        if sps.count() >=1:
+            serialPort =sps[0]
+        else:
+            sps = glob.glob(" /dev/ttyACM**")
+            if sps.count() >=1:
+                serialPort =sps[0]
+        
+    print("Seial port detected:", serialPort)
+    return serialPort
+    
 
 class GPS:
     """Hält die GPS-Daten vor"""
@@ -187,7 +180,7 @@ col_bl = (0, 0, 10, 0)
 col_ws = (0, 0, 0, 10)
 col_sw = (0, 0, 0, 0)
 
-neo = Neopixel(board.D10, 4)
+#neo = Neopixel(board.D10, 4)
 # LED 0 RPi Programm läuft
 # LED 1 Status GPS rot: nicht bereit, grün: ok
 # LED 2 blinkt bei jeder Bildauswertung
@@ -196,6 +189,7 @@ neo = Neopixel(board.D10, 4)
 
 def getGpsPos():
     """GPS-Empfänger über USB einlesen und auswerten"""
+    serialPort = get_ser
     ser = serial.Serial("/dev/ttyACM0", 9600, timeout=5.0)
     sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
     print("Starte GPS Auswertung")
@@ -203,7 +197,6 @@ def getGpsPos():
         try:
             line = sio.readline()
             if line.startswith("$GPRMC") or line.startswith("$GNRMC"):
-                neo.update_pixel(3, col_bl)
                 params = line.split(",")
                 gps.status = params[2]
                 if gps.status == "A":
@@ -237,16 +230,11 @@ def getGpsPos():
         except KeyboardInterrupt:
             print("Keyboard Interrupt")
             break
-        neo.update_pixel(3, col_sw)
-
 
 def main():
     """Routine um QR-Codes zu erkennen und die Daten dann abzulegen"""
     gps_ready_alt = False
     worker_gps = threading.Thread(None, getGpsPos, daemon=True)
-
-    neo.update_pixel(0, col_gn)
-    neo.update_pixel(1, col_rt)
 
     filename = (
         str(datetime.now())[:-7].replace("-", "").replace(":", "").replace(" ", "_")
@@ -261,14 +249,10 @@ def main():
         while True:
             if gps_ready_alt == False and gps.status == "A":
                 gps_ready_alt = True
-                neo.update_pixel(1, col_gn)
             if gps_ready_alt == True and gps.status != "A":
                 gps_ready_alt = False
-                neo.update_pixel(1, col_rt)
-            neo.update_pixel(2, col_sw)
             ret, frame = cap.read()
             frame = cv2.resize(frame, dsize=(0, 0), fx=0.4, fy=0.4)
-            neo.update_pixel(2, col_bl)
             codes = decode(frame)
             for code in codes:
                 qrCode = QR(code.data.decode())
@@ -296,35 +280,6 @@ def simple_logger():
         logger.close()
 
 
-def neopixel_test():
-    """Test der Neopixel-Funktion"""
-    # NeoPixels must be connected to D10, if no root rights are permitted (and SPI has to be enabled in config)
-    neo = Neopixel(board.D10, 10)
-    for i in range(10):
-        neo.update_pixel(i, (10, 0, 0, 0))  # grün
-        time.sleep(0.2)
-    for i in range(10):
-        neo.update_pixel(i, (0, 10, 0, 0))  # rot
-        time.sleep(0.2)
-    for i in range(10):
-        neo.update_pixel(i, (0, 0, 10, 0))  # blau
-        time.sleep(0.2)
-    for i in range(10):
-        neo.update_pixel(i, (0, 0, 0, 10))  # weiss
-        time.sleep(0.2)
-
 
 if __name__ == "__main__":
-    sl = False
-    neos = False
-    for arg in sys.argv:
-        if arg == "-sl":
-            sl = True
-        if arg == "-neos":
-            neos = True
-    if sl:
-        simple_logger()
-    elif neos:
-        neopixel_test()
-    else:
-        main()
+     main()
