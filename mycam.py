@@ -96,7 +96,9 @@ class Camera():
             frame = self.get_frame()
             frame = cv2.resize(frame,(0,0), fx=0.5, fy=0.5)
             frame = cv2.rotate(frame, cv2.ROTATE_180)
-            frame = cv2.putText(frame, "Hallo", (10,40), cv2.FONT_HERSHEY_DUPLEX, 1, (255,255,255), 1)
+            height, width, _ = frame.shape
+            text = str(width)+"x"+str(height)
+            frame = cv2.putText(frame, text, (10,40), cv2.FONT_HERSHEY_DUPLEX, 1, (255,255,255), 1)
         _,x = cv2.imencode('.jpeg', frame)
         return x.tobytes()
 
