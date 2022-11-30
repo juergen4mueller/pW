@@ -10,7 +10,7 @@ html {
 }
 
 body {
-    background-color: rgb(255, 186, 75);
+    background-color: rgb(213, 213, 213);
 
 }
 
@@ -171,7 +171,10 @@ body footer h2 {
     align-content: center;
 }
 
-.
-.controls{
+.controls {
     align-content: center;
+}
+
+.row_btnResolution {
+    display: none;
 }

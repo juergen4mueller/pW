@@ -9,11 +9,13 @@ eel.init(os.path.join(sys.path[0], "web"))
 
 
 import socket
+
+
 def get_ip_address():
     """Ermittlung der IP-Adresse im Netzwerk
     Returns:
         str: lokale IP-Adresse
-        """
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     socket_ip = "127.0.0.1"
     try:
@@ -27,47 +29,75 @@ def get_ip_address():
     return socket_ip
 
 
-app_running = False
-
 @eel.expose  # Expose this function to Javascript
 def startApp():
-    global app_running
+    persWerb.runLogger(False)
     app_running = True
     print("start App")
 
 
 @eel.expose
 def stopApp():
-    global app_running
-    app_running = False
+    persWerb.runLogger(False)
     print("stopp app")
 
+
 @eel.expose
-def setResolution(width,height):
+def setResolution(width, height):
     persWerb.cam.set_image_size(width, height)
-    
+
 
 counter = 0
 
 
-def updater():
-    global counter
+def update_gps_data():
     while True:
-        if app_running:
-            counter += 1
-            eel.set_Kompass_value(str(counter))
-        time.sleep(0.005)
+        if persWerb.gps.status == "A":
+            # Daten valide, update
+            eel.set_Gps_values(
+                persWerb.gps.lat, persWerb.gps.lon, persWerb.gps.v_kmh, persWerb.gps.dir
+            )
+        else:
+            eel.set_Gps_values(0, 0, 0, 0)
+        time.sleep(1)
 
 
-runner = threading.Thread(target=updater, daemon=True)
+host = get_ip_address()
+
+
+def run_eel():
+    eel.start(
+        "index.html",
+        host=host,
+        mode="chrome",
+        port=8080,
+        size=(800, 480),
+        position=(0, 0),
+    )
+
+
+thread_gps_update = threading.Thread(target=update_gps_data, daemon=True)
+thread_qr_finder = threading.Thread(target=persWerb.start_qr_dedection, daemon=True)
 
 
 if __name__ == "__main__":
-    host = get_ip_address()
-    runner.start()
+    thread_gps_update.start()
     persWerb.startWebcam()
+    thread_qr_finder.start()
     time.sleep(2)
     print("starting eel ...")
     eel.start(
-        "index.html", host=host, mode="chrome", port=8080, size=(800, 480), position=(0, 0)
+        "index.html",
+        host=host,
+        mode="chrome",
+        port=8080,
+        size=(800, 480),
+        position=(0, 0),
     )
+
+    """
+    # run forever
+    thread_eel = threading.Thread(target=run_eel, daemon=True).start()
+    while True:
+        time.sleep(0.1)
+    """

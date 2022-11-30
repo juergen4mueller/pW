@@ -22,7 +22,7 @@ def get_ip_address():
     """Ermittlung der IP-Adresse im Netzwerk
     Returns:
         str: lokale IP-Adresse
-        """
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     socket_ip = "127.0.0.1"
     try:
@@ -37,23 +37,31 @@ def get_ip_address():
 
 
 def get_serial_port():
+    """Serial Port für GPS abhängig vom Gerät ermitteln
+    Implementierung für Windows steht noch aus
+    Dropdown kann hier noch für mehr Optionen sorgen
+
+    Returns:
+        _type_: _description_
+    """
     serialPort = None
     system = platform.system()
-    if system =="Darwin":
+    if system == "Darwin":
         serialPort = glob.glob("/dev/tty.usb*")[0]
-       
-    elif system =="Linux":
+
+    elif system == "Linux":
         sps = glob.glob("/dev/ttyUSB*")
-        if sps.count() >=1:
-            serialPort =sps[0]
+        if len(sps) >= 1:
+            serialPort = sps[0]
         else:
             sps = glob.glob(" /dev/ttyACM**")
-            if sps.count() >=1:
-                serialPort =sps[0]
-        
+            if len(sps) >= 1:
+                serialPort = sps[0]
+
     print("Seial port detected:", serialPort)
     return serialPort
-    
+
+
 class GPS:
     """Hält die GPS-Daten vor"""
 
@@ -94,7 +102,9 @@ class GPS:
         print("Alti:", self.alti)
         print("SATs used: ", self.sats_used)
 
+
 gps = GPS()
+
 
 class QR:
     """Infos des im Bild gefundenen QR-Codes"""
@@ -135,6 +145,7 @@ class QR:
         print(self.data)
         print("Offset: ", self.posx, ":", self.posy)
         print(20 * "*")
+
 
 class DL:
     """Funktion um die Daten zu speichern"""
@@ -191,16 +202,24 @@ class DL:
     def close(self):
         self.con.close()
 
+
+gpsActive = False
+
+
 def getGpsPos():
-    """GPS-Empfänger über USB einlesen und auswerten"""
+    global gpsActive
+    """ Stream vom GPS-Empfänger einlesen, auswerten und ablegen der Daten im gps-Objekt
+    """
     sp = get_serial_port()
     ser = serial.Serial(sp, 9600, timeout=5.0)
     sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
     print("Starte GPS Auswertung")
-    while True:
+    while gpsActive:
         try:
             line = sio.readline()
+            update = False
             if line.startswith("$GPRMC") or line.startswith("$GNRMC"):
+                update = True
                 params = line.split(",")
                 gps.status = params[2]
                 if gps.status == "A":
@@ -227,6 +246,7 @@ def getGpsPos():
                     yy = int(params[9][4:6]) + 2000
                     gps.date_time = datetime(yy, MM, dd, hh, mm, ss)
             elif line.startswith("$GPGGA") or line.startswith("$GNGGA"):
+                update = True
                 params = line.split(",")
                 if params[6] == "1":
                     gps.sats_used = int(params[7])
@@ -234,20 +254,33 @@ def getGpsPos():
         except KeyboardInterrupt:
             print("Keyboard Interrupt")
             break
+    ser.close()
 
 
+worker_gps = threading.Thread(None, getGpsPos, daemon=True)
 
 
-class Camera():
+def start_gps():
+    global gpsActive
+    gpsActive = True
+    worker_gps.start()
+
+
+def stop_gps():
+    global gpsActive
+    gpsActive = False
+
+
+class Camera:
     """A class for the camera
 
     Args:
     skip_frame: number of frames to skip while recording
-    cam_number: which camera should be used. Defaults to 0. 
+    cam_number: which camera should be used. Defaults to 0.
 
     Attributes
     --------
-    
+
     VideoCapture: Class to get the video feed
     _imgsize: size of the image
 
@@ -262,11 +295,13 @@ class Camera():
 
     def __init__(self, skip_frame=2, cam_number=0, thread=False, fps=30):
         self.skip_frame = skip_frame
-        self.VideoCapture = cv2.VideoCapture(cam_number)#, cv2.CAP_V4L) #,
+        self.VideoCapture = cv2.VideoCapture(cam_number)  # , cv2.CAP_V4L) #,
         self.VideoCapture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.VideoCapture.set(cv2.CAP_PROP_FPS, fps)
-        self._imgsize = (int(self.VideoCapture.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                          int(self.VideoCapture.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        self._imgsize = (
+            int(self.VideoCapture.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            int(self.VideoCapture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+        )
         if thread:
             self._queue_drive = queue.Queue(maxsize=1)
             self._thread = threading.Thread(target=self._reader, daemon=True)
@@ -274,13 +309,12 @@ class Camera():
 
     def set_image_size(self, width, height):
         print("New image size:", width, "x", height)
-        
+
         self.VideoCapture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self.VideoCapture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)              
-            
+        self.VideoCapture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
     def _reader(self):
-        """Put current frame recorded by the camera to the Queue-Object.
-        """
+        """Put current frame recorded by the camera to the Queue-Object."""
         while True:
 
             frame = self.get_frame()
@@ -294,12 +328,12 @@ class Camera():
 
     def read(self):
         """Returns current frame hold in Queue-Object.
-        
+
         Returns:
             numpy array: returns current frame as numpy array
         """
         return self._queue_drive.get()
-        
+
     def get_frame(self):
         """Returns current frame recorded by the camera
 
@@ -324,12 +358,14 @@ class Camera():
         """
         if frame is None:
             frame = self.get_frame()
-            frame = cv2.resize(frame,(0,0), fx=0.5, fy=0.5)
+            frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
             frame = cv2.rotate(frame, cv2.ROTATE_180)
             height, width, _ = frame.shape
-            text = str(width)+"x"+str(height)
-            frame = cv2.putText(frame, text, (10,40), cv2.FONT_HERSHEY_DUPLEX, 1, (255,255,255), 1)
-        _,x = cv2.imencode('.jpeg', frame)
+            text = str(width) + "x" + str(height)
+            frame = cv2.putText(
+                frame, text, (10, 40), cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1
+            )
+        _, x = cv2.imencode(".jpeg", frame)
         return x.tobytes()
 
     def save_frame(self, path: str, name: str, frame=None):
@@ -338,7 +374,7 @@ class Camera():
         Args:
             path (str): path where the file should be saved
             name (str): name under which the file should be saved
-            frame (np.array, optional): frame which should be saved. 
+            frame (np.array, optional): frame which should be saved.
                                         If None then the current frame recorded by the camera gets saved.
                                         Defaults to None.
         """
@@ -347,8 +383,7 @@ class Camera():
         cv2.imwrite(path + name, frame)
 
     def release(self):
-        """Releases the camera so it can be used by other programs.
-        """
+        """Releases the camera so it can be used by other programs."""
         self.VideoCapture.release()
 
     def get_image_bytes(self):
@@ -360,17 +395,19 @@ class Camera():
         while True:
             jepg = self.get_jpeg()
 
-            yield (b'--frame\r\n'
-                b'Content-Type: image/jpeg\r\n\r\n' + jepg + b'\r\n\r\n')
+            yield (
+                b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + jepg + b"\r\n\r\n"
+            )
             time.sleep(0.01)
 
 
 cam = Camera(thread=True, fps=30)
 
+
 server = Flask(__name__)
 app = dash.Dash(
     __name__,
-    server = server,
+    server=server,
     meta_tags=[
         {"name": "viewport"},
         {"content": "width = device,width, initial-scale=1.0"},
@@ -378,73 +415,82 @@ app = dash.Dash(
 )
 app.layout = html.Img("http://127.0.0.1/video_feed")
 
-@server.route('/video_feed')
+
+@server.route("/video_feed")
 def video_feed():
     """Will return the video feed from the camera
 
     Returns:
         Response: Response object with the video feed
     """
-    return Response(cam.get_image_bytes(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(
+        cam.get_image_bytes(), mimetype="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
 host = get_ip_address()
+
+
 def runVideoServer(host=host, port=8090):
-  print("starting App ...")
-  app.run_server(debug=False, host=host, port=port)
-  print("App destroyed")
+    print("starting App ...")
+    app.run_server(debug=False, host="localhost", port=port)
+    print("App destroyed")
+
 
 videoServer = threading.Thread(None, runVideoServer, daemon=True)
-
 
 
 def startWebcam():
     print("starting video server ...")
     videoServer.start()
-    
-    
+
     return cam
-    
+
+
 def stopWebcam():
     cam.release()
-    
 
 
+loggerRunning = False
+
+
+def runLogger(run):
+    global loggerRunning
+    loggerRunning = run
 
 
 def start_qr_dedection():
     """Routine um QR-Codes zu erkennen und die Daten dann abzulegen"""
     gps_ready_alt = False
-    worker_gps = threading.Thread(None, getGpsPos, daemon=True)
-
     filename = (
         str(datetime.now())[:-7].replace("-", "").replace(":", "").replace(" ", "_")
         + "_log.sqlite"
     )
     logger = DL(filename=filename)
-    worker_gps.start()
-    
+    start_gps()
     try:
         while True:
-            if gps_ready_alt == False and gps.status == "A":
-                gps_ready_alt = True
-            if gps_ready_alt == True and gps.status != "A":
-                gps_ready_alt = False
-            frame = cam.get_frame()
-            frame = cv2.resize(frame, dsize=(0, 0), fx=0.4, fy=0.4)
-            codes = decode(frame)
-            for code in codes:
-                qrCode = QR(code.data.decode())
-                qrCode.set_pos(qrCode.calc_code_position(frame, code.rect))
-                # qrCode.debug()
-                logger.log_item(qrCode)
+            time.sleep(0.01)
+            if loggerRunning:
+                if gps_ready_alt == False and gps.status == "A":
+                    gps_ready_alt = True
+                if gps_ready_alt == True and gps.status != "A":
+                    gps_ready_alt = False
+                frame = cam.get_frame()
+                frame = cv2.resize(frame, dsize=(0, 0), fx=0.4, fy=0.4)
+                codes = decode(frame)
+                for code in codes:
+                    qrCode = QR(code.data.decode())
+                    qrCode.set_pos(qrCode.calc_code_position(frame, code.rect))
+                    # qrCode.debug()
+                    logger.log_item(qrCode)
+            else:
+                pass
 
     except KeyboardInterrupt:
         print("Clean and exit program")
         logger.close()
 
 
-
 if __name__ == "__main__":
-  start_qr_dedection()
-    
-    
+    start_qr_dedection()

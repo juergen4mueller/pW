@@ -21,15 +21,20 @@ function say_hello_js(x) {
     console.log("Hello from " + x);
 }
 
-eel.expose(set_Kompass_value);
-function set_Kompass_value(x) {
+eel.expose(set_Gps_values);
+function set_Gps_values(_gps_lat, _gps_lon, _gps_v_kmh, _gps_dir) {
     const kompassnadel = document.getElementById("kompassnadel");
-    console.log(typeof (x))
-    console.log(x)
-    kompassnadel.style.transform = `rotate(${x}deg)`;
+    kompassnadel.style.transform = `rotate(${_gps_dir}deg)`;
     const gps_dir = document.getElementById("gps_dir");
-    gps_dir.innerHTML = x;
+    gps_dir.innerHTML = _gps_dir;
+    const gps_lat = document.getElementById("gps_lat");
+    gps_lat.innerHTML = _gps_lat;
+    const gps_lon = document.getElementById("gps_lon");
+    gps_lon.innerHTML = _gps_lon;
+    const gps_speed = document.getElementById("gps_speed");
+    gps_speed.innerHTML = _gps_v_kmh;
 }
+
 
 say_hello_js("Javascript World!");
 eel.say_hello_py("Javascript World!"); // Call a Python function
