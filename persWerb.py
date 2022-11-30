@@ -477,7 +477,7 @@ def start_qr_dedection():
                 if gps_ready_alt == True and gps.status != "A":
                     gps_ready_alt = False
                 frame = cam.get_frame()
-                frame = cv2.resize(frame, dsize=(0, 0), fx=0.4, fy=0.4)
+                # frame = cv2.resize(frame, dsize=(0, 0), fx=0.4, fy=0.4)
                 codes = decode(frame)
                 for code in codes:
                     qrCode = QR(code.data.decode())
@@ -493,4 +493,5 @@ def start_qr_dedection():
 
 
 if __name__ == "__main__":
+    runLogger(True)
     start_qr_dedection()
