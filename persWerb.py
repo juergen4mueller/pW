@@ -117,6 +117,7 @@ class QR:
     @staticmethod
     def calc_code_position(frame, rect):
         """Ermittelt die Position des Codes im Bild
+            zeichnet einen Rahmen um den Code
 
         Args:
             frame (_type_): Bild in dem der Code gefunden wurde
@@ -131,6 +132,8 @@ class QR:
         left, top, height, width = rect
         codeCenter = (left + width // 2, top + height // 2)
         frameCenter = (f_width // 2, f_height // 2)
+        # markieren des QR-Codes im übergebenen Frame
+        frame = cv2.rectangle(frame, (left,top),(left+width, top+height),(255,0,0),2)
         x_val = round((codeCenter[0] - frameCenter[0]) / frameCenter[0], 3)
         y_val = round((codeCenter[1] - frameCenter[1]) / frameCenter[1], 3)
         return (x_val, y_val)
@@ -294,8 +297,11 @@ class Camera:
     release(): releases the camera, so it can be used again and by other programs
     """
 
+
+
     def __init__(self, skip_frame=2, cam_number=0, thread=False, fps=30):
         self.skip_frame = skip_frame
+        self._resultFrame = None
         self.VideoCapture = cv2.VideoCapture(cam_number)  # , cv2.CAP_V4L) #,
         self.VideoCapture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.VideoCapture.set(cv2.CAP_PROP_FPS, fps)
@@ -335,6 +341,7 @@ class Camera:
         """
         return self._queue_drive.get()
 
+
     def get_frame(self):
         """Returns current frame recorded by the camera
 
@@ -347,6 +354,19 @@ class Camera:
         _, frame = self.VideoCapture.read()
         frame = cv2.flip(frame, -1)
         return frame
+
+
+    def search_qr_codes(self):
+        decodedQrCodes= []
+        frame = self.get_frame()
+        codes = decode(frame)
+        for code in codes:
+            qrCode = QR(code.data.decode())
+            qrCode.set_pos(qrCode.calc_code_position(frame, code.rect))
+            decodedQrCodes.append(qrCode)
+        self._resultFrame = frame
+        return decodedQrCodes
+        
 
     def get_jpeg(self, frame=None):
         """Returns the current frame as .jpeg/raw bytes file
@@ -362,10 +382,9 @@ class Camera:
             frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
             frame = cv2.rotate(frame, cv2.ROTATE_180)
             height, width, _ = frame.shape
-            text = str(width) + "x" + str(height)
-            frame = cv2.putText(
-                frame, text, (10, 40), cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1
-            )
+            #text = str(width) + "x" + str(height)
+            #frame = cv2.putText(
+            #   frame, text, (10, 40), cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
         _, x = cv2.imencode(".jpeg", frame)
         return x.tobytes()
 
@@ -394,7 +413,7 @@ class Camera:
             [bytes]: Bytes string with the image information
         """
         while True:
-            jepg = self.get_jpeg()
+            jepg = self.get_jpeg(self._resultFrame)
 
             yield (
                 b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + jepg + b"\r\n\r\n"
@@ -472,21 +491,16 @@ def start_qr_dedection():
     try:
         while True:
             time.sleep(0.01)
-            if loggerRunning:
-                if gps_ready_alt == False and gps.status == "A":
-                    gps_ready_alt = True
-                if gps_ready_alt == True and gps.status != "A":
-                    gps_ready_alt = False
-                frame = cam.get_frame()
-                # frame = cv2.resize(frame, dsize=(0, 0), fx=0.4, fy=0.4)
-                codes = decode(frame)
-                for code in codes:
-                    qrCode = QR(code.data.decode())
-                    qrCode.set_pos(qrCode.calc_code_position(frame, code.rect))
-                    # qrCode.debug()
-                    logger.log_item(qrCode)
-            else:
-                pass
+            #if loggerRunning:
+            if gps_ready_alt == False and gps.status == "A":
+                gps_ready_alt = True
+            if gps_ready_alt == True and gps.status != "A":
+                gps_ready_alt = False
+            qrcodes = cam.search_qr_codes()
+            for qrcode in qrcodes:
+                logger.log_item(qrcode)
+            #else:
+            #   pass
 
     except KeyboardInterrupt:
         print("Clean and exit program")
