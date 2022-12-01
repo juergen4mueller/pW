@@ -151,7 +151,8 @@ class DL:
     """Funktion um die Daten zu speichern"""
 
     def __init__(self, filename="db.sqlite", timeBetween=20) -> None:
-        folder = sys.path[0]
+        folder =  os.path.join(sys.path[0], "tracefile")
+        #os.path.join(folder, "tracefile")
         self.timeBetween = timeBetween
         self.seenCodes = {}
         self.dbPath = os.path.join(folder, filename)
