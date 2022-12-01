@@ -359,6 +359,7 @@ class Camera:
     def search_qr_codes(self):
         decodedQrCodes= []
         frame = self.get_frame()
+        frame = cv2.rotate(frame, cv2.ROTATE_180)
         codes = decode(frame)
         for code in codes:
             qrCode = QR(code.data.decode())
@@ -381,7 +382,7 @@ class Camera:
             frame = self.get_frame()
             frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
             frame = cv2.rotate(frame, cv2.ROTATE_180)
-            height, width, _ = frame.shape
+            #height, width, _ = frame.shape
             #text = str(width) + "x" + str(height)
             #frame = cv2.putText(
             #   frame, text, (10, 40), cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
@@ -497,8 +498,10 @@ def start_qr_dedection():
             if gps_ready_alt == True and gps.status != "A":
                 gps_ready_alt = False
             qrcodes = cam.search_qr_codes()
+
             for qrcode in qrcodes:
                 logger.log_item(qrcode)
+
             #else:
             #   pass
 
