@@ -86,7 +86,8 @@ if __name__ == "__main__":
     thread_qr_finder.start()
     time.sleep(2)
     print("starting eel ...")
-
+ 
+    
     # entweder eel starten und bei schließen des Fenster App beenden
     eel.start(
         "index.html",
@@ -96,7 +97,7 @@ if __name__ == "__main__":
         size=(800, 480),
         position=(0, 0),
     )
-
+    
     """
     # oder run forever
     thread_eel = threading.Thread(target=run_eel, daemon=True).start()
