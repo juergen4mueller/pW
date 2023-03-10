@@ -17,6 +17,10 @@ from dash import dash, dcc, html, callback_context
 from flask import Flask, Response, request
 import dash_bootstrap_components as dbc
 
+#Imports Eichi
+import cv2
+import depthai as dai
+
 
 def get_ip_address():
     """Ermittlung der IP-Adresse im Netzwerk
@@ -53,10 +57,14 @@ def get_serial_port():
         sps = glob.glob("/dev/ttyUSB*")
         if len(sps) >= 1:
             serialPort = sps[0]
+            
         else:
-            sps = glob.glob(" /dev/ttyACM**")
+            print("Merker3")
+            sps = glob.glob("/dev/ttyACM**")
+            print("sps:",sps)
             if len(sps) >= 1:
                 serialPort = sps[0]
+                print("Merker4")
 
     print("Seial port detected:", serialPort)
     return serialPort
