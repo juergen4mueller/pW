@@ -12,6 +12,9 @@ import sqlite3
 import platform
 import glob
 import socket
+import numpy as np
+import json
+import av_cam
 
 from dash import dash, dcc, html, callback_context
 from flask import Flask, Response, request
@@ -20,6 +23,20 @@ import dash_bootstrap_components as dbc
 #Imports Eichi
 import cv2
 import depthai as dai
+
+import copy
+
+from typing import Optional
+try:
+    from vimba import *
+except:
+    print("Vimba not found on your system, pleas install VimbaPython")
+
+FRAME_QUEUE_SIZE = 10
+FRAME_HEIGHT = 4112  
+FRAME_WIDTH = 3008
+
+
 
 
 def get_ip_address():
@@ -66,6 +83,9 @@ def get_serial_port():
                 serialPort = sps[0]
                 print("Merker4")
 
+    elif system == "Windows":
+        serialPort = "COM4"
+        
     print("Seial port detected:", serialPort)
     return serialPort
 
@@ -158,7 +178,7 @@ class QR:
         print(20 * "*")
 
 
-class DL:
+class DataLogger:
     """Funktion um die Daten zu speichern"""
 
     def __init__(self, filename="db.sqlite", timeBetween=20) -> None:
@@ -263,25 +283,35 @@ def getGpsPos():
                 if params[6] == "1":
                     gps.sats_used = int(params[7])
                     gps.alti = round(float(params[9]), 1)
+                    
         except KeyboardInterrupt:
             print("Keyboard Interrupt")
             break
     ser.close()
 
 
-worker_gps = threading.Thread(None, getGpsPos, daemon=True)
 
 
 def start_gps():
     global gpsActive
-    gpsActive = True
-    worker_gps.start()
 
 
 def stop_gps():
     global gpsActive
     gpsActive = False
 
+
+def create_dummy_frame() -> np.ndarray:
+    cv_frame = np.zeros((50, 640, 1), np.uint8)
+    cv_frame[:] = 0
+
+    cv2.putText(cv_frame, 'No Stream available. Please connect a Camera.', org=(30, 30),
+                fontScale=1, color=255, thickness=1, fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL)
+
+    return cv_frame
+
+
+    
 
 class Camera:
     """A class for the camera
@@ -307,20 +337,24 @@ class Camera:
 
 
 
-    def __init__(self, skip_frame=2, cam_number=0, thread=False, fps=30):
-        self.skip_frame = skip_frame
-        self._resultFrame = None
-        self.VideoCapture = cv2.VideoCapture(cam_number)  # , cv2.CAP_V4L) #,
-        self.VideoCapture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        self.VideoCapture.set(cv2.CAP_PROP_FPS, fps)
-        self._imgsize = (
-            int(self.VideoCapture.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            int(self.VideoCapture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-        )
-        if thread:
-            self._queue_drive = queue.Queue(maxsize=1)
-            self._thread = threading.Thread(target=self._reader, daemon=True)
-            self._thread.start()
+    def __init__(self, skip_frame=2, cam_type = "av", cam_number=0, thread=False, fps=30):
+        self._resultFrame = create_dummy_frame()
+        self.camType = cam_type
+        if self.camType == "cv":
+            self.skip_frame = skip_frame
+            self.VideoCapture = cv2.VideoCapture(cam_number)  # , cv2.CAP_V4L) #,
+            self.VideoCapture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            self.VideoCapture.set(cv2.CAP_PROP_FPS, fps)
+            self._imgsize = (
+                int(self.VideoCapture.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                int(self.VideoCapture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+            )
+            if thread:
+                self._queue_drive = queue.Queue(maxsize=1)
+                self._thread = threading.Thread(target=self._reader, daemon=True)
+                self._thread.start()
+        elif self.camType == "av":
+            self.VideoCapture = av_cam.MainThread()
 
     def set_image_size(self, width, height):
         print("New image size:", width, "x", height)
@@ -356,11 +390,14 @@ class Camera:
         Returns:
             numpy array: returns current frame as numpy array
         """
-        if self.skip_frame:
-            for i in range(int(self.skip_frame)):
-                _, frame = self.VideoCapture.read()
-        _, frame = self.VideoCapture.read()
-        frame = cv2.flip(frame, -1)
+        if(self.camType == "cv"):
+            if self.skip_frame:
+                for i in range(int(self.skip_frame)):
+                    _, frame = self.VideoCapture.read()
+            _, frame = self.VideoCapture.read()
+            frame = cv2.flip(frame, -1)
+        elif self.camType == "av":
+            frame = self.VideoCapture.getFrame()
         return frame
 
 
@@ -373,7 +410,10 @@ class Camera:
             qrCode = QR(code.data.decode())
             qrCode.set_pos(qrCode.calc_code_position(frame, code.rect))
             decodedQrCodes.append(qrCode)
-        self._resultFrame = frame
+        if frame.shape[1] > 800:
+            factor = 800 / frame.shape[1]
+        frame = cv2.resize(frame, (0,0), fx=factor, fy=factor, interpolation=cv2.INTER_AREA)
+        self._resultFrame = frame 
         return decodedQrCodes
         
 
@@ -432,7 +472,6 @@ class Camera:
 
 cam = Camera(thread=True, fps=30)
 
-
 server = Flask(__name__)
 app = dash.Dash(
     __name__,
@@ -487,16 +526,40 @@ def runLogger(run):
     global loggerRunning
     loggerRunning = run
 
-
+class QR_Detection():
+    def __init__(self) -> None:
+        cam.getFrame()
+        self.gpsReady = False
+        logFile = (
+        str(datetime.now())[:-7].replace("-", "").replace(":", "").replace(" ", "_")
+        + "_log.sqlite")
+        self.logger = DataLogger(filename=logFile)
+        self.worker_gps = threading.Thread(None, getGpsPos, daemon=True)
+    
+    def start(self):
+        self.worker_gps.start()
+        pass
+    
+    def stop(self):
+        self.worker_gps.join()
+        pass
+    
+    
+    
 def start_qr_dedection():
     """Routine um QR-Codes zu erkennen und die Daten dann abzulegen"""
     gps_ready_alt = False
-    filename = (
+    logFile = (
         str(datetime.now())[:-7].replace("-", "").replace(":", "").replace(" ", "_")
         + "_log.sqlite"
     )
-    logger = DL(filename=filename)
-    start_gps()
+    logger = DataLogger(filename=logFile)    
+    
+    #start_gps()
+    worker_gps = threading.Thread(None, getGpsPos, daemon=True)
+    gpsActive = True
+    worker_gps.start()
+    
     try:
         while True:
             time.sleep(0.01)

@@ -11,7 +11,13 @@ html {
 
 body {
     background-color: rgb(213, 213, 213);
+}
 
+.header_div {
+    position: static;
+    width: 100vw;
+    border: 2px #808080 solid;
+    padding: 1vw;
 }
 
 .main_div {
@@ -46,6 +52,7 @@ header img {
 .video_div {
     position: relative;
     width: 100vw;
+    top: auto;
     border: 2px black solid;
     background-color: rgb(192, 192, 192);
 }

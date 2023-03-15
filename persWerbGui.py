@@ -71,7 +71,7 @@ def run_eel():
         host=host,
         mode="chrome",
         port=8080,
-        size=(800, 480),
+        size=(1200, 800),
         position=(0, 0),
     )
 
@@ -94,7 +94,7 @@ if __name__ == "__main__":
         host=host,
         mode="chrome",
         port=8080,
-        size=(800, 480),
+        size=(1200, 800),
         position=(0, 0),
     )
     
