@@ -2,86 +2,163 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLE Advertisement Scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scale Scanner Pro</title>
     <style>
-        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
-        button { 
-            background: #222; color: #0f0; border: 1px solid #0f0; 
-            padding: 15px; width: 100%; font-size: 1.2rem;
+        :root { --accent: #00ff88; --bg: #0a0a0c; --card: #1c1c1e; }
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: var(--bg);
+            color: #fff;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            height: 100vh;
+            box-sizing: border-box;
         }
-        .log-entry { 
-            border-bottom: 1px solid #333; padding: 10px 0; font-size: 12px; 
-            word-break: break-all;
+        .weight-display {
+            background: var(--card);
+            border-radius: 30px;
+            padding: 40px 20px;
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            margin-bottom: 25px;
         }
-        .highlight { color: #fff; font-weight: bold; }
+        h1 { font-size: 0.9rem; color: #8e8e93; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; }
+        #weight { font-size: 85px; font-weight: 800; color: var(--accent); margin: 0; font-variant-numeric: tabular-nums; }
+        #weight span { font-size: 28px; color: #444; margin-left: 5px; }
+        
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            width: 100%;
+            max-width: 350px;
+            padding: 18px;
+            font-size: 19px;
+            border-radius: 16px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,122,255,0.3);
+        }
+        button:active { transform: scale(0.97); }
+
+        #debug {
+            width: 100%;
+            max-width: 350px;
+            margin-top: 25px;
+            background: #000;
+            border-radius: 12px;
+            padding: 15px;
+            font-family: 'SF Mono', monospace;
+            font-size: 11px;
+            color: #00ff41;
+            height: 180px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+        .log-entry { border-bottom: 1px solid #222; padding: 4px 0; }
+        .log-time { color: #666; }
     </style>
 </head>
 <body>
 
-    <button onclick="scanDevices()">1. SCAN STARTEN</button>
-    <p id="status">Status: Bereit.</p>
-    <div id="results"></div>
+    <div class="weight-display">
+        <h1>Körpergewicht</h1>
+        <div id="weight">0.0<span>kg</span></div>
+        <div id="status" style="color: #666; font-size: 13px; margin-top: 10px;">Bereit zum Scannen</div>
+    </div>
 
-    <script>
-        const resultsEl = document.getElementById('results');
-        const statusEl = document.getElementById('status');
+    <button onclick="startScanning()">Waage suchen</button>
 
-        async function scanDevices() {
-            try {
-                statusEl.innerText = "Status: Suche...";
+    <div id="debug">
+        <div class="log-entry">System initialisiert...</div>
+    </div>
+
+<script>
+    const weightEl = document.getElementById('weight');
+    const statusEl = document.getElementById('status');
+    const debugEl = document.getElementById('debug');
+
+    function log(msg) {
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        debugEl.innerHTML = `<div class="log-entry"><span class="log-time">[${time}]</span> ${msg}</div>` + debugEl.innerHTML;
+        console.log(msg);
+    }
+
+    async function startScanning() {
+        try {
+            log("Suche nach Geräten...");
+            statusEl.innerText = "Suche läuft...";
+
+            // Wir fragen nach der Waage. acceptAllDevices hilft manchmal bei WebBLE,
+            // um überhaupt Advertisements zu sehen.
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [
+                    { namePrefix: 'IF_B7' },
+                    { namePrefix: 'if_b7' }
+                ],
+                optionalServices: [0x181B, 0x1801, 0x010E]
+            });
+
+            log("Gerät gewählt: " + device.name);
+            statusEl.innerText = "Gerät verbunden. Warte auf Daten...";
+
+            // Event Listener für Broadcast-Daten
+            device.addEventListener('advertisementreceived', (event) => {
+                log("Paket empfangen!");
                 
-                // Wir fragen nach dem Gerät. Das öffnet den Bluefy-Dialog.
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [0x181B, 0x1801, 0x180D] 
-                });
+                if (event.manufacturerData) {
+                    for (let [id, dataView] of event.manufacturerData) {
+                        let hexId = id.toString(16).toUpperCase().padStart(4, '0');
+                        
+                        // Bytes in Hex für Debugging
+                        let bytes = [];
+                        for (let i = 0; i < dataView.byteLength; i++) {
+                            bytes.push(dataView.getUint8(i).toString(16).toUpperCase().padStart(2, '0'));
+                        }
+                        log(`ID: 0x${hexId} | Bytes: ${bytes.join(' ')}`);
 
-                statusEl.innerText = "Status: Verbunden mit " + device.name;
-                
-                // Wir hängen den Listener VOR dem watchAdvertisements an
-                device.addEventListener('advertisementreceived', (event) => {
-                    renderData(event);
-                });
+                        // Dein Arduino-Parsing: Byte 12 und 13 (Offset beachten!)
+                        // WICHTIG: Web-Bluetooth schneidet die 2 Bytes der ID oft weg. 
+                        // Probier Index 10/11 ODER 12/13.
+                        if (dataView.byteLength >= 12) {
+                            let bHigh, bLow;
+                            
+                            if (dataView.byteLength >= 14) {
+                                bHigh = dataView.getUint8(12);
+                                bLow = dataView.getUint8(13);
+                            } else {
+                                bHigh = dataView.getUint8(10);
+                                bLow = dataView.getUint8(11);
+                            }
 
-                // Falls Bluefy watchAdvertisements doch irgendwie unterstützt:
-                if (device.watchAdvertisements) {
-                    await device.watchAdvertisements();
-                    statusEl.innerText = "Status: Listening (watchAdvertisements)...";
-                } else {
-                    statusEl.innerText = "Status: Gerät gewählt, aber watchAds fehlt.";
-                }
-
-            } catch (error) {
-                statusEl.innerText = "Fehler: " + error;
-            }
-        }
-
-        function renderData(event) {
-            let manufacturerString = "Keine Daten";
-            
-            if (event.manufacturerData) {
-                manufacturerString = "";
-                for (let [id, dataView] of event.manufacturerData) {
-                    let hexId = id.toString(16).toUpperCase().padStart(4, '0');
-                    let bytes = [];
-                    for (let i = 0; i < dataView.byteLength; i++) {
-                        bytes.push(dataView.getUint8(i).toString(16).toUpperCase().padStart(2, '0'));
+                            let weightRaw = (bHigh << 8) | bLow;
+                            let kg = weightRaw / 100.0;
+                            
+                            if (kg > 5 && kg < 250) {
+                                weightEl.innerHTML = `${kg.toFixed(1)}<span>kg</span>`;
+                            }
+                        }
                     }
-                    manufacturerString += `ID: 0x${hexId} | Daten: ${bytes.join(' ')}<br>`;
                 }
+            });
+
+            if (device.watchAdvertisements) {
+                log("Starte watchAdvertisements...");
+                await device.watchAdvertisements();
+            } else {
+                log("WARNUNG: watchAdvertisements wird nicht unterstützt.");
             }
 
-            const html = `
-                <div class="log-entry">
-                    <span class="highlight">${new Date().toLocaleTimeString()}</span><br>
-                    Name: ${event.name || 'Unbekannt'}<br>
-                    RSSI: ${event.rssi}<br>
-                    ${manufacturerString}
-                </div>
-            `;
-            resultsEl.innerHTML = html + resultsEl.innerHTML;
+        } catch (error) {
+            log("FEHLER: " + error);
+            statusEl.innerText = "Scan abgebrochen";
         }
-    </script>
+    }
+</script>
 </body>
 </html>
