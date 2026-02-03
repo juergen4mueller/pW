@@ -51,57 +51,72 @@
 </div>
 
 <script>
-    const statusEl = document.getElementById('status');
-    const weightEl = document.getElementById('weight');
+   const statusEl = document.getElementById('status');
+const weightEl = document.getElementById('weight');
 
-    async function connectScale() {
-        try {
-            statusEl.innerText = "Suche nach Waage...";
-            
-            // Filter für die Waage
-            const device = await navigator.bluetooth.requestDevice({
-                filters: [
-                    { namePrefix: 'IF_B7' },
-                    { namePrefix: 'if_b7' }
-                ],
-                optionalServices: [0x181B, 0x1801] // Weight Scale Service oder Generic
-            });
+// Neues Element für Debug-Ausgabe erstellen
+const debugLog = document.createElement('div');
+debugLog.style.cssText = "margin-top:20px; font-size:10px; color:#0f0; background:#111; padding:10px; width:90%; overflow-wrap: break-word; text-align:left; max-height:150px; overflow-y:auto;";
+document.body.appendChild(debugLog);
 
-            statusEl.innerText = "Gefunden: " + device.name + ". Starte Überwachung...";
+function logDebug(msg) {
+    const now = new Date().toLocaleTimeString();
+    debugLog.innerHTML = `[${now}] ${msg}<br>` + debugLog.innerHTML;
+}
 
-            // Event-Listener für Advertisements
-            device.addEventListener('advertisementreceived', (event) => {
-                statusEl.innerText = "Daten empfangen...";
-                
-                // Wir suchen die Manufacturer Data (ID: 0x010E)
-                // In Web Bluetooth ist das eine Map
-                if (event.manufacturerData) {
-                    for (let [id, dataView] of event.manufacturerData) {
-                        // Konsolen-Log für Debugging in Bluefy
-                        console.log("ID:", id, "Data:", dataView);
+async function connectScale() {
+    try {
+        logDebug("Suche gestartet...");
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: 'IF_B7' }, { namePrefix: 'if_b7' }],
+            optionalServices: [0x181B, 0x1801, 0x180A, 0x180D]
+        });
+
+        logDebug("Gefunden: " + device.name);
+
+        device.addEventListener('advertisementreceived', (event) => {
+            logDebug("Paket empfangen!");
+
+            if (event.manufacturerData) {
+                // Wir iterieren durch alle Manufacturer IDs im Paket
+                for (let [id, dataView] of event.manufacturerData) {
+                    // ID in Hex (z.B. 0x010E)
+                    let idHex = "0x" + id.toString(16).padStart(4, '0').toUpperCase();
+                    
+                    // Alle Bytes in Hex umwandeln für die Analyse
+                    let bytes = [];
+                    for (let i = 0; i < dataView.byteLength; i++) {
+                        bytes.push(dataView.getUint8(i).toString(16).padStart(2, '0').toUpperCase());
+                    }
+                    let hexString = bytes.join(" ");
+
+                    logDebug(`ID: ${idHex} | Bytes: ${hexString}`);
+
+                    // Versuch das Gewicht zu berechnen (Offset 12/13)
+                    if (dataView.byteLength >= 14) {
+                        let b12 = dataView.getUint8(12);
+                        let b13 = dataView.getUint8(13);
+                        let weightRaw = (b12 << 8) | b13;
+                        let weightKg = weightRaw / 100.0;
                         
-                        // Entspricht deinem Arduino-Code: mdata[12] und mdata[13]
-                        if (dataView.byteLength >= 14) {
-                            let b12 = dataView.getUint8(12);
-                            let b13 = dataView.getUint8(13);
-                            let weightRaw = (b12 << 8) | b13;
-                            let weightKg = weightRaw / 100.0;
-                            
+                        // Nur anzeigen, wenn der Wert realistisch ist (> 1kg)
+                        if (weightKg > 1) {
                             weightEl.innerHTML = weightKg.toFixed(1) + '<span id="unit">kg</span>';
                         }
                     }
                 }
-            });
+            } else {
+                logDebug("Keine ManufacturerData im Paket.");
+            }
+        });
 
-            // WICHTIG: Das aktiviert das eigentliche "Hören" auf die Pakete
-            await device.watchAdvertisements();
-            statusEl.innerText = "Warte auf Gewichtsmessung...";
+        await device.watchAdvertisements();
+        statusEl.innerText = "Warte auf Messung...";
 
-        } catch (error) {
-            statusEl.innerText = "Fehler: " + error;
-            console.error(error);
-        }
+    } catch (error) {
+        logDebug("FEHLER: " + error);
     }
+}
 </script>
 
 </body>
