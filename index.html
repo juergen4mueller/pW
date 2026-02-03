@@ -2,208 +2,85 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scale Monitor Pro</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE Advertisement Scanner</title>
     <style>
-        :root {
-            --accent-color: #00ff88;
-            --bg-color: #000;
-            --card-bg: #1c1c1e;
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
+        button { 
+            background: #222; color: #0f0; border: 1px solid #0f0; 
+            padding: 15px; width: 100%; font-size: 1.2rem;
         }
-        body {
-            font-family: -apple-system, system-ui, sans-serif;
-            background-color: var(--bg-color);
-            color: #fff;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-            box-sizing: border-box;
-            height: 100vh;
+        .log-entry { 
+            border-bottom: 1px solid #333; padding: 10px 0; font-size: 12px; 
+            word-break: break-all;
         }
-        .card {
-            background: var(--card-bg);
-            border-radius: 20px;
-            padding: 20px;
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        h1 { font-size: 1rem; color: #8e8e93; text-transform: uppercase; margin: 0; }
-        #weight {
-            font-size: 72px;
-            font-weight: 800;
-            color: var(--accent-color);
-            margin: 10px 0;
-        }
-        #weight span { font-size: 24px; color: #8e8e93; margin-left: 5px; }
-        
-        button {
-            background-color: #007AFF;
-            color: white;
-            border: none;
-            width: 100%;
-            max-width: 400px;
-            padding: 16px;
-            font-size: 18px;
-            border-radius: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.1s;
-        }
-        button:active { transform: scale(0.98); background-color: #0063cc; }
-
-        .chart-container {
-            width: 100%;
-            max-width: 400px;
-            background: var(--card-bg);
-            border-radius: 20px;
-            padding: 15px;
-            box-sizing: border-box;
-            flex-grow: 1;
-            max-height: 300px;
-        }
-
-        #status-log {
-            width: 100%;
-            max-width: 400px;
-            font-family: monospace;
-            font-size: 10px;
-            color: #555;
-            margin-top: 15px;
-            text-align: left;
-            max-height: 80px;
-            overflow-y: auto;
-            background: #000;
-            padding: 5px;
-        }
+        .highlight { color: #fff; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h1>Aktuelles Gewicht</h1>
-        <div id="weight">0.0<span>kg</span></div>
-        <div id="status-text" style="color:#8e8e93; font-size: 14px;">Nicht verbunden</div>
-    </div>
-
-    <button onclick="startBluetooth()">Waage verbinden</button>
-
-    <div class="chart-container">
-        <canvas id="weightChart"></canvas>
-    </div>
-
-    <div id="status-log">System bereit...</div>
+    <button onclick="scanDevices()">1. SCAN STARTEN</button>
+    <p id="status">Status: Bereit.</p>
+    <div id="results"></div>
 
     <script>
-        const weightEl = document.getElementById('weight');
-        const statusText = document.getElementById('status-text');
-        const logEl = document.getElementById('status-log');
-        let weightHistory = [];
+        const resultsEl = document.getElementById('results');
+        const statusEl = document.getElementById('status');
 
-        // Chart Initialisierung
-        const ctx = document.getElementById('weightChart').getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Gewicht (kg)',
-                    data: [],
-                    borderColor: '#00ff88',
-                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { grid: { color: '#333' }, ticks: { color: '#8e8e93' } },
-                    x: { display: false }
-                },
-                plugins: { legend: { display: false } }
-            }
-        });
-
-        function log(msg) {
-            const time = new Date().toLocaleTimeString().split(' ')[0];
-            logEl.innerHTML = `[${time}] ${msg}<br>` + logEl.innerHTML;
-        }
-
-        async function startBluetooth() {
+        async function scanDevices() {
             try {
-                log("Suche nach IF_B7...");
+                statusEl.innerText = "Status: Suche...";
+                
+                // Wir fragen nach dem Gerät. Das öffnet den Bluefy-Dialog.
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'IF_B7' }, { namePrefix: 'if_b7' }],
-                    optionalServices: [0xFFB0, 0xFFB2, 0x181B, 0x1801]
+                    acceptAllDevices: true,
+                    optionalServices: [0x181B, 0x1801, 0x180D] 
                 });
 
-                statusText.innerText = "Verbinde...";
-                const server = await device.gatt.connect();
-                log("Verbunden mit GATT");
+                statusEl.innerText = "Status: Verbunden mit " + device.name;
+                
+                // Wir hängen den Listener VOR dem watchAdvertisements an
+                device.addEventListener('advertisementreceived', (event) => {
+                    renderData(event);
+                });
 
-                const services = await server.getPrimaryServices();
-                for (const service of services) {
-                    const characteristics = await service.getCharacteristics();
-                    for (const char of characteristics) {
-                        if (char.properties.notify || char.properties.indicate) {
-                            await char.startNotifications();
-                            char.addEventListener('characteristicvaluechanged', handleData);
-                            log("Abonniert: " + char.uuid);
-                        }
-                    }
+                // Falls Bluefy watchAdvertisements doch irgendwie unterstützt:
+                if (device.watchAdvertisements) {
+                    await device.watchAdvertisements();
+                    statusEl.innerText = "Status: Listening (watchAdvertisements)...";
+                } else {
+                    statusEl.innerText = "Status: Gerät gewählt, aber watchAds fehlt.";
                 }
-                statusText.innerText = "Bereit zum Wiegen";
-                log("Warte auf Daten...");
 
             } catch (error) {
-                log("Fehler: " + error);
-                statusText.innerText = "Verbindung fehlgeschlagen";
+                statusEl.innerText = "Fehler: " + error;
             }
         }
 
-        function handleData(event) {
-            const data = event.target.value;
-            // Debug: Logge alle Bytes
-            let hex = "";
-            for (let i = 0; i < data.byteLength; i++) {
-                hex += data.getUint8(i).toString(16).padStart(2, '0').toUpperCase() + " ";
-            }
-            log("Bytes: " + hex);
-
-            // Parsing Logik (angepasst auf typische IF_B7 GATT Pakete)
-            // Meistens Byte 1 & 2 oder 3 & 4
-            if (data.byteLength >= 4) {
-                let raw = (data.getUint8(1) << 8) | data.getUint8(2);
-                let kg = raw / 100.0;
-
-                // Plausibilitätscheck (z.B. zwischen 5kg und 200kg)
-                if (kg > 5 && kg < 200) {
-                    updateDisplay(kg);
+        function renderData(event) {
+            let manufacturerString = "Keine Daten";
+            
+            if (event.manufacturerData) {
+                manufacturerString = "";
+                for (let [id, dataView] of event.manufacturerData) {
+                    let hexId = id.toString(16).toUpperCase().padStart(4, '0');
+                    let bytes = [];
+                    for (let i = 0; i < dataView.byteLength; i++) {
+                        bytes.push(dataView.getUint8(i).toString(16).toUpperCase().padStart(2, '0'));
+                    }
+                    manufacturerString += `ID: 0x${hexId} | Daten: ${bytes.join(' ')}<br>`;
                 }
             }
-        }
 
-        function updateDisplay(kg) {
-            weightEl.innerHTML = `${kg.toFixed(1)}<span>kg</span>`;
-            
-            // Nur hinzufügen, wenn sich der Wert geändert hat
-            if (weightHistory[weightHistory.length - 1] !== kg) {
-                weightHistory.push(kg);
-                if (weightHistory.length > 20) weightHistory.shift();
-                
-                chart.data.labels.push("");
-                if (chart.data.labels.length > 20) chart.data.labels.shift();
-                chart.data.datasets[0].data = weightHistory;
-                chart.update();
-            }
+            const html = `
+                <div class="log-entry">
+                    <span class="highlight">${new Date().toLocaleTimeString()}</span><br>
+                    Name: ${event.name || 'Unbekannt'}<br>
+                    RSSI: ${event.rssi}<br>
+                    ${manufacturerString}
+                </div>
+            `;
+            resultsEl.innerHTML = html + resultsEl.innerHTML;
         }
     </script>
 </body>
