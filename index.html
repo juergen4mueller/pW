@@ -1,32 +1,108 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Waage Monitor</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .container { text-align: center; width: 90%; }
+        h1 { font-size: 1.2rem; color: #888; text-transform: uppercase; letter-spacing: 2px; }
+        #weight {
+            font-size: 80px;
+            font-weight: 800;
+            margin: 20px 0;
+            color: #00ff88;
+            font-variant-numeric: tabular-nums;
+        }
+        #unit { font-size: 24px; color: #888; }
+        button {
+            background-color: #007AFF;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 30px;
+        }
+        #status { font-size: 14px; color: #555; margin-top: 20px; font-family: monospace; }
+    </style>
+</head>
 <body>
-    <h1>Waage Live-Daten</h1>
-    <button onclick="startScan()">Waage suchen</button>
-    <div id="weight" style="font-size: 50px;">0.0 kg</div>
-    <canvas id="chart"></canvas>
 
-    <script>
-    async function startScan() {
-        // Hinweis: Web Bluetooth ist komplexer beim Scannen nach Advertisements,
-        // da es meist eine direkte Verbindung (GATT) erwartet.
-        // Bei deiner Waage (IF_B7) klappt das meist über "watchAdvertisements()"
-        const device = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'IF_B7' }],
-            optionalServices: ['generic_access'] 
-        });
-        
-        device.addEventListener('advertisementreceived', (event) => {
-            // Hier das Parsing analog zu deinem Arduino Code
-            let mData = event.manufacturerData.get(0x010E); // Beispiel ID
-            if (mData) {
-                let weight = (mData.getUint8(12) << 8 | mData.getUint8(13)) / 100.0;
-                document.getElementById('weight').innerText = weight + " kg";
-            }
-        });
-        
-        await device.watchAdvertisements();
+<div class="container">
+    <h1>Körpergewicht</h1>
+    <div id="weight">0.0<span id="unit">kg</span></div>
+    <button onclick="connectScale()">Waage verbinden</button>
+    <div id="status">Bereit zum Scannen...</div>
+</div>
+
+<script>
+    const statusEl = document.getElementById('status');
+    const weightEl = document.getElementById('weight');
+
+    async function connectScale() {
+        try {
+            statusEl.innerText = "Suche nach Waage...";
+            
+            // Filter für die Waage
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [
+                    { namePrefix: 'IF_B7' },
+                    { namePrefix: 'if_b7' }
+                ],
+                optionalServices: [0x181B, 0x1801] // Weight Scale Service oder Generic
+            });
+
+            statusEl.innerText = "Gefunden: " + device.name + ". Starte Überwachung...";
+
+            // Event-Listener für Advertisements
+            device.addEventListener('advertisementreceived', (event) => {
+                statusEl.innerText = "Daten empfangen...";
+                
+                // Wir suchen die Manufacturer Data (ID: 0x010E)
+                // In Web Bluetooth ist das eine Map
+                if (event.manufacturerData) {
+                    for (let [id, dataView] of event.manufacturerData) {
+                        // Konsolen-Log für Debugging in Bluefy
+                        console.log("ID:", id, "Data:", dataView);
+                        
+                        // Entspricht deinem Arduino-Code: mdata[12] und mdata[13]
+                        if (dataView.byteLength >= 14) {
+                            let b12 = dataView.getUint8(12);
+                            let b13 = dataView.getUint8(13);
+                            let weightRaw = (b12 << 8) | b13;
+                            let weightKg = weightRaw / 100.0;
+                            
+                            weightEl.innerHTML = weightKg.toFixed(1) + '<span id="unit">kg</span>';
+                        }
+                    }
+                }
+            });
+
+            // WICHTIG: Das aktiviert das eigentliche "Hören" auf die Pakete
+            await device.watchAdvertisements();
+            statusEl.innerText = "Warte auf Gewichtsmessung...";
+
+        } catch (error) {
+            statusEl.innerText = "Fehler: " + error;
+            console.error(error);
+        }
     }
-    </script>
+</script>
+
 </body>
 </html>
