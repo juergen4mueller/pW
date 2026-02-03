@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Waage Live-Daten</h1>
+    <button onclick="startScan()">Waage suchen</button>
+    <div id="weight" style="font-size: 50px;">0.0 kg</div>
+    <canvas id="chart"></canvas>
+
+    <script>
+    async function startScan() {
+        // Hinweis: Web Bluetooth ist komplexer beim Scannen nach Advertisements,
+        // da es meist eine direkte Verbindung (GATT) erwartet.
+        // Bei deiner Waage (IF_B7) klappt das meist über "watchAdvertisements()"
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: 'IF_B7' }],
+            optionalServices: ['generic_access'] 
+        });
+        
+        device.addEventListener('advertisementreceived', (event) => {
+            // Hier das Parsing analog zu deinem Arduino Code
+            let mData = event.manufacturerData.get(0x010E); // Beispiel ID
+            if (mData) {
+                let weight = (mData.getUint8(12) << 8 | mData.getUint8(13)) / 100.0;
+                document.getElementById('weight').innerText = weight + " kg";
+            }
+        });
+        
+        await device.watchAdvertisements();
+    }
+    </script>
+</body>
+</html>
