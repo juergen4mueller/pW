@@ -3,121 +3,208 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Waage Monitor</title>
+    <title>Scale Monitor Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        :root {
+            --accent-color: #00ff88;
+            --bg-color: #000;
+            --card-bg: #1c1c1e;
+        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #000;
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: var(--bg-color);
             color: #fff;
+            margin: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
             height: 100vh;
-            margin: 0;
-            overflow: hidden;
         }
-        .container { text-align: center; width: 90%; }
-        h1 { font-size: 1.2rem; color: #888; text-transform: uppercase; letter-spacing: 2px; }
+        .card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 20px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        h1 { font-size: 1rem; color: #8e8e93; text-transform: uppercase; margin: 0; }
         #weight {
-            font-size: 80px;
+            font-size: 72px;
             font-weight: 800;
-            margin: 20px 0;
-            color: #00ff88;
-            font-variant-numeric: tabular-nums;
+            color: var(--accent-color);
+            margin: 10px 0;
         }
-        #unit { font-size: 24px; color: #888; }
+        #weight span { font-size: 24px; color: #8e8e93; margin-left: 5px; }
+        
         button {
             background-color: #007AFF;
             color: white;
             border: none;
-            padding: 15px 30px;
+            width: 100%;
+            max-width: 400px;
+            padding: 16px;
             font-size: 18px;
-            border-radius: 12px;
+            border-radius: 14px;
             font-weight: 600;
             cursor: pointer;
-            margin-top: 30px;
+            transition: transform 0.1s;
         }
-        #status { font-size: 14px; color: #555; margin-top: 20px; font-family: monospace; }
+        button:active { transform: scale(0.98); background-color: #0063cc; }
+
+        .chart-container {
+            width: 100%;
+            max-width: 400px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 15px;
+            box-sizing: border-box;
+            flex-grow: 1;
+            max-height: 300px;
+        }
+
+        #status-log {
+            width: 100%;
+            max-width: 400px;
+            font-family: monospace;
+            font-size: 10px;
+            color: #555;
+            margin-top: 15px;
+            text-align: left;
+            max-height: 80px;
+            overflow-y: auto;
+            background: #000;
+            padding: 5px;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>Körpergewicht</h1>
-    <div id="weight">0.0<span id="unit">kg</span></div>
-    <button onclick="connectScale()">Waage verbinden</button>
-    <div id="status">Bereit zum Scannen...</div>
-</div>
+    <div class="card">
+        <h1>Aktuelles Gewicht</h1>
+        <div id="weight">0.0<span>kg</span></div>
+        <div id="status-text" style="color:#8e8e93; font-size: 14px;">Nicht verbunden</div>
+    </div>
 
-<script>
-   const statusEl = document.getElementById('status');
-const weightEl = document.getElementById('weight');
+    <button onclick="startBluetooth()">Waage verbinden</button>
 
-// Neues Element für Debug-Ausgabe erstellen
-const debugLog = document.createElement('div');
-debugLog.style.cssText = "margin-top:20px; font-size:10px; color:#0f0; background:#111; padding:10px; width:90%; overflow-wrap: break-word; text-align:left; max-height:150px; overflow-y:auto;";
-document.body.appendChild(debugLog);
+    <div class="chart-container">
+        <canvas id="weightChart"></canvas>
+    </div>
 
-function logDebug(msg) {
-    const now = new Date().toLocaleTimeString();
-    debugLog.innerHTML = `[${now}] ${msg}<br>` + debugLog.innerHTML;
-}
+    <div id="status-log">System bereit...</div>
 
-async function connectScale() {
-    try {
-        logDebug("Suche gestartet...");
-        const device = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'IF_B7' }, { namePrefix: 'if_b7' }],
-            optionalServices: [0x181B, 0x1801, 0x180A, 0x180D]
-        });
+    <script>
+        const weightEl = document.getElementById('weight');
+        const statusText = document.getElementById('status-text');
+        const logEl = document.getElementById('status-log');
+        let weightHistory = [];
 
-        logDebug("Gefunden: " + device.name);
-
-        device.addEventListener('advertisementreceived', (event) => {
-            logDebug("Paket empfangen!");
-
-            if (event.manufacturerData) {
-                // Wir iterieren durch alle Manufacturer IDs im Paket
-                for (let [id, dataView] of event.manufacturerData) {
-                    // ID in Hex (z.B. 0x010E)
-                    let idHex = "0x" + id.toString(16).padStart(4, '0').toUpperCase();
-                    
-                    // Alle Bytes in Hex umwandeln für die Analyse
-                    let bytes = [];
-                    for (let i = 0; i < dataView.byteLength; i++) {
-                        bytes.push(dataView.getUint8(i).toString(16).padStart(2, '0').toUpperCase());
-                    }
-                    let hexString = bytes.join(" ");
-
-                    logDebug(`ID: ${idHex} | Bytes: ${hexString}`);
-
-                    // Versuch das Gewicht zu berechnen (Offset 12/13)
-                    if (dataView.byteLength >= 14) {
-                        let b12 = dataView.getUint8(12);
-                        let b13 = dataView.getUint8(13);
-                        let weightRaw = (b12 << 8) | b13;
-                        let weightKg = weightRaw / 100.0;
-                        
-                        // Nur anzeigen, wenn der Wert realistisch ist (> 1kg)
-                        if (weightKg > 1) {
-                            weightEl.innerHTML = weightKg.toFixed(1) + '<span id="unit">kg</span>';
-                        }
-                    }
-                }
-            } else {
-                logDebug("Keine ManufacturerData im Paket.");
+        // Chart Initialisierung
+        const ctx = document.getElementById('weightChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Gewicht (kg)',
+                    data: [],
+                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { grid: { color: '#333' }, ticks: { color: '#8e8e93' } },
+                    x: { display: false }
+                },
+                plugins: { legend: { display: false } }
             }
         });
 
-        await device.watchAdvertisements();
-        statusEl.innerText = "Warte auf Messung...";
+        function log(msg) {
+            const time = new Date().toLocaleTimeString().split(' ')[0];
+            logEl.innerHTML = `[${time}] ${msg}<br>` + logEl.innerHTML;
+        }
 
-    } catch (error) {
-        logDebug("FEHLER: " + error);
-    }
-}
-</script>
+        async function startBluetooth() {
+            try {
+                log("Suche nach IF_B7...");
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'IF_B7' }, { namePrefix: 'if_b7' }],
+                    optionalServices: [0xFFB0, 0xFFB2, 0x181B, 0x1801]
+                });
 
+                statusText.innerText = "Verbinde...";
+                const server = await device.gatt.connect();
+                log("Verbunden mit GATT");
+
+                const services = await server.getPrimaryServices();
+                for (const service of services) {
+                    const characteristics = await service.getCharacteristics();
+                    for (const char of characteristics) {
+                        if (char.properties.notify || char.properties.indicate) {
+                            await char.startNotifications();
+                            char.addEventListener('characteristicvaluechanged', handleData);
+                            log("Abonniert: " + char.uuid);
+                        }
+                    }
+                }
+                statusText.innerText = "Bereit zum Wiegen";
+                log("Warte auf Daten...");
+
+            } catch (error) {
+                log("Fehler: " + error);
+                statusText.innerText = "Verbindung fehlgeschlagen";
+            }
+        }
+
+        function handleData(event) {
+            const data = event.target.value;
+            // Debug: Logge alle Bytes
+            let hex = "";
+            for (let i = 0; i < data.byteLength; i++) {
+                hex += data.getUint8(i).toString(16).padStart(2, '0').toUpperCase() + " ";
+            }
+            log("Bytes: " + hex);
+
+            // Parsing Logik (angepasst auf typische IF_B7 GATT Pakete)
+            // Meistens Byte 1 & 2 oder 3 & 4
+            if (data.byteLength >= 4) {
+                let raw = (data.getUint8(1) << 8) | data.getUint8(2);
+                let kg = raw / 100.0;
+
+                // Plausibilitätscheck (z.B. zwischen 5kg und 200kg)
+                if (kg > 5 && kg < 200) {
+                    updateDisplay(kg);
+                }
+            }
+        }
+
+        function updateDisplay(kg) {
+            weightEl.innerHTML = `${kg.toFixed(1)}<span>kg</span>`;
+            
+            // Nur hinzufügen, wenn sich der Wert geändert hat
+            if (weightHistory[weightHistory.length - 1] !== kg) {
+                weightHistory.push(kg);
+                if (weightHistory.length > 20) weightHistory.shift();
+                
+                chart.data.labels.push("");
+                if (chart.data.labels.length > 20) chart.data.labels.shift();
+                chart.data.datasets[0].data = weightHistory;
+                chart.update();
+            }
+        }
+    </script>
 </body>
 </html>
